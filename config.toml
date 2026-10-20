@@ -1,0 +1,10 @@
+# Café Quant Lab theme (Streamlit reads this automatically when you run from this folder)
+[theme]
+base = "light"
+primaryColor = "#1F9D8B"
+backgroundColor = "#F6F3EC"
+secondaryBackgroundColor = "#EEE8DC"
+textColor = "#14243A"
+
+[browser]
+gatherUsageStats = false
