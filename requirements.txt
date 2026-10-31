@@ -1,5 +1,7 @@
-streamlit>=1.45
+streamlit>=1.45      # dashboard (chart click events, fragments)
+altair>=5.0          # interactive charts (also installed with Streamlit; listed explicitly)
 numpy>=1.25
-matplotlib>=3.7
 pandas>=2.0
+matplotlib>=3.7      # charts inside the Word evidence pack
+python-docx>=1.1     # Word evidence pack (tab H)
 pytest>=7.0
