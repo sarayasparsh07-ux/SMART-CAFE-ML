@@ -25,14 +25,57 @@ import streamlit as st
 
 st.set_page_config(page_title="The Smart Café · Café Quant Lab", page_icon="☕", layout="wide")
 
+import sys
+from pathlib import Path
+
+# Always look for cafe.py / agent.py in app.py's own folder first, whatever folder Streamlit was launched from.
+APP_DIR = Path(__file__).resolve().parent
+if str(APP_DIR) not in sys.path:
+    sys.path.insert(0, str(APP_DIR))
+
 try:
     from agent import epsilon_at, floor_episode, policy_from_Q, train
-    from cafe import (CafeSim, challenge_result, decide, evaluate, marginal_unit_economics, reachable_states,
-                      run_month, state_features, to_cents, totals)
+    from cafe import CafeSim, evaluate, reachable_states, run_month, state_features, totals
 except Exception as exc:  # clear, actionable message instead of a stack trace
-    st.error("Could not import **cafe.py** / **agent.py**. Keep both files next to app.py.")
+    missing = [f for f in ("cafe.py", "agent.py") if not (APP_DIR / f).is_file()]
+    st.error("Could not import **cafe.py** / **agent.py**. "
+             + (f"Missing from `{APP_DIR}`: **{', '.join(missing)}**. Put them in the same folder as app.py."
+                if missing else f"Both files are in `{APP_DIR}`, but one of them failed to load — see the details "
+                                 "below; replacing them with the versions from the project ZIP fixes this."))
     st.exception(exc)
     st.stop()
+
+try:  # helpers added to cafe.py in the final audit; app.py also runs with an older cafe.py
+    from cafe import challenge_result, decide, marginal_unit_economics, to_cents
+except ImportError:  # identical logic, used only when cafe.py predates these helpers
+    def to_cents(x: float) -> int:
+        return int(round(float(x) * 100))
+
+    def decide(you_cents: int, ai_cents: int) -> Dict[str, object]:
+        diff = int(you_cents) - int(ai_cents)
+        winner = "you" if diff > 0 else "ai" if diff < 0 else "tie"
+        return dict(you_cents=int(you_cents), ai_cents=int(ai_cents), diff_cents=diff, winner=winner)
+
+    def challenge_result(you_rows: List[dict], ai_rows: List[dict]) -> Dict[str, object]:
+        out = decide(sum(to_cents(r["profit"]) for r in you_rows), sum(to_cents(r["profit"]) for r in ai_rows))
+        out.update(you_total=out["you_cents"] / 100, ai_total=out["ai_cents"] / 100,
+                   you_minus_ai=out["diff_cents"] / 100, margin=abs(out["diff_cents"]) / 100)
+        return out
+
+    def marginal_unit_economics(p: Dict[str, float]) -> Dict[str, float]:
+        div = lambda a, b: a / b if b else float("nan")  # noqa: E731
+        margin = p["price"] - p["order_cost"]
+        lost_sale = margin + p["stockout_penalty"]
+        exp_spoil = p["spoil_frac"] * p["spoilage_cost"]
+        unsold_same_day = p["order_cost"] + p["holding_cost"] + exp_spoil
+        carry_credit = (1 - p["spoil_frac"]) * p["order_cost"]
+        unsold_net = unsold_same_day - carry_credit
+        spoiled_unit = p["order_cost"] + p["holding_cost"] + p["spoilage_cost"]
+        return dict(margin=margin, lost_sale=lost_sale, expected_spoilage_charge=exp_spoil,
+                    unsold_same_day=unsold_same_day, carry_credit=carry_credit, unsold_net=unsold_net,
+                    spoiled_unit=spoiled_unit, ratio_net=div(lost_sale, lost_sale + unsold_net),
+                    ratio_same_day=div(lost_sale, lost_sale + unsold_same_day),
+                    ratio_spoiled=div(lost_sale, lost_sale + spoiled_unit))
 
 # ================================================================ design tokens & constants
 NAVY, CARD, TEAL, EMERALD = "#14243A", "#FFFDF9", "#1F9D8B", "#23856D"
